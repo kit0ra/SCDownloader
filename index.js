@@ -152,13 +152,34 @@ async function fetchData(url) {
       const divs = document.querySelectorAll(`div[id^="${VIDEO_PREFIX}"]`)
       return Array.from(divs).map(div => div.id.substring(VIDEO_PREFIX.length))
     })
-    console.log(videoIds)
-    console.log(titles)
+
     await browser.close()
-    return [...videoIds, titles]
+
+    const data = {}
+    for (let i = 0; i < videoIds.length; i++) {
+      data[videoIds[i]] = titles[i]
+    }
+    return data
   } catch (error) {
     console.error(`Failed to navigate: ${error.message}`)
     await browser.close()
     return null
   }
 }
+
+function findTitle(data, id) {
+  return data[id] || 'Title not found'
+}
+
+fetchData(
+  'https://www.skill-capped.com/valorant/browse/course/yph4lclcnw/1nrgw1w4yh'
+)
+  .then(data => {
+    console.log('Download and processing completed successfully.')
+    console.log(`title of the video is: ${findTitle(data, 'yph4lclcnw')}`)
+    process.exit(0) // Normal exit
+  })
+  .catch(error => {
+    console.error('An error occurred:', error)
+    process.exit(1) // Exit with error
+  })
