@@ -1,6 +1,7 @@
 import axios from 'axios'
 import fs from 'fs'
 import path from 'path'
+import puppeteer from 'puppeteer'
 import {
   createWriteStream,
   readdirSync,
@@ -117,5 +118,47 @@ async function downloadVideo(videoUrl, maxConcurrency = 3) {
     await concatenateChunks(downloadedFiles, outputFile)
   } else {
     console.error('No chunks were downloaded successfully.')
+  }
+}
+
+async function fetchData(url) {
+  console.log('Launching browser...')
+  const browser = await puppeteer.launch({
+    headless: true,
+    args: ['--no-sandbox', '--disable-setuid-sandbox'],
+    slowMo: 250, // Slow down by 250ms for each Puppeteer operation. Helpful for observing what happens.
+  })
+  const page = await browser.newPage()
+
+  try {
+    console.log(`Navigating to ${url}...`)
+    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 300000 })
+    console.log('Page loaded.')
+    console.log('waiting for selector...')
+    await page.waitForSelector('.css-1w71aej', { visible: true })
+    console.log('selector ready')
+    await page.evaluate(() => {
+      let btn = document.querySelector('.css-1w71aej')
+      if (btn) btn.click()
+    })
+    await page.waitForSelector('.css-1mkvlph', { visible: true })
+    const titles = await page.evaluate(() => {
+      return Array.from(document.querySelectorAll('.css-1mkvlph')).map(el =>
+        el.textContent.trim()
+      )
+    })
+    const videoIds = await page.evaluate(() => {
+      const VIDEO_PREFIX = 'BrVidRow-'
+      const divs = document.querySelectorAll(`div[id^="${VIDEO_PREFIX}"]`)
+      return Array.from(divs).map(div => div.id.substring(VIDEO_PREFIX.length))
+    })
+    console.log(videoIds)
+    console.log(titles)
+    await browser.close()
+    return [...videoIds, titles]
+  } catch (error) {
+    console.error(`Failed to navigate: ${error.message}`)
+    await browser.close()
+    return null
   }
 }
