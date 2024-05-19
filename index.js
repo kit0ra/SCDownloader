@@ -89,3 +89,33 @@ function concatenateChunks(files, outputFile) {
     output.end()
   })
 }
+
+async function downloadVideo(videoUrl, maxConcurrency = 3) {
+  const tmpDir = path.join(process.cwd(), 'tmp')
+  const videosDir = path.join(process.cwd(), 'downloads')
+  ensureDirExists(tmpDir)
+  ensureDirExists(videosDir)
+
+  const videoId = videoUrl.split('/').slice(-2, -1)[0]
+  const resolution = 'hd' // Example, you can modify as needed
+  const chunks = prepareChunks(videoId, resolution)
+  let downloadedFiles = []
+
+  console.log(`Downloading video with the ID: ${videoId}`)
+
+  for (let i = 0; i < chunks.length; i += maxConcurrency) {
+    const group = chunks.slice(i, i + maxConcurrency)
+    const results = await Promise.all(
+      group.map((url, idx) => downloadChunk(url, tmpDir, i + idx + 1))
+    )
+    downloadedFiles.push(...results.filter(r => r !== null))
+    if (results.includes(null)) break // Break the loop if any null results (403 errors)
+  }
+
+  if (downloadedFiles.length > 0) {
+    const outputFile = path.join(videosDir, `${videoId}.ts`)
+    await concatenateChunks(downloadedFiles, outputFile)
+  } else {
+    console.error('No chunks were downloaded successfully.')
+  }
+}
