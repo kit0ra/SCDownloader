@@ -1,9 +1,10 @@
 import axios from 'axios'
 import path from 'path'
 import puppeteer from 'puppeteer'
+import yargs from 'yargs'
+import { hideBin } from 'yargs/helpers'
 import {
   createWriteStream,
-  readdirSync,
   readFileSync,
   unlinkSync,
   mkdirSync,
@@ -12,6 +13,35 @@ import {
 import { pipeline as pipelineCallback } from 'stream'
 import { promisify } from 'util'
 const pipeline = promisify(pipelineCallback)
+
+const argv = yargs(hideBin(process.argv))
+  .usage('Usage: $0 --url [url] -t -directory [path]')
+  .option('url', {
+    describe: 'URL of the video to download',
+    alias: 'u',
+    type: 'string',
+    demandOption: true, // The URL is required
+  })
+  .option('t', {
+    alias: 'title',
+    describe: 'Download video with its title',
+    type: 'boolean',
+    default: false,
+  })
+  .option('directory', {
+    alias: 'dir',
+    describe: 'Output directory for the downloaded video',
+    type: 'string',
+    default: 'downloads', // Default directory
+  })
+  .option('resolution', {
+    alias: 'r',
+    describe: 'Resolution of the video (hd, fullhd, ultrahd)',
+    type: 'string',
+    default: 'hd', // Default resolution
+  })
+  .help('h')
+  .alias('h', 'help').argv
 
 const RESOLUTIONS = {
   hd: 1500,
@@ -38,7 +68,7 @@ function prepareChunks(videoId, resolution) {
 }
 
 async function downloadChunk(url, destDir, index) {
-  const filename = path.basename(url)
+  const filename = `chunk-${index}.ts`
   const dest = path.join(destDir, filename)
 
   try {
@@ -95,12 +125,12 @@ function concatenateChunks(files, outputFile) {
 
 async function downloadVideo(videoUrl, maxConcurrency = 3) {
   const tmpDir = path.join(process.cwd(), 'tmp')
-  const videosDir = path.join(process.cwd(), 'downloads')
+  const videosDir = path.join(argv.directory)
   ensureDirExists(tmpDir)
   ensureDirExists(videosDir)
 
   const videoId = videoUrl.split('/').slice(-2, -1)[0]
-  const resolution = 'hd'
+  const resolution = argv.resolution
   const chunks = prepareChunks(videoId, resolution)
   let downloadedFiles = []
 
@@ -110,11 +140,12 @@ async function downloadVideo(videoUrl, maxConcurrency = 3) {
       group.map((url, idx) => downloadChunk(url, tmpDir, i + idx + 1))
     )
     downloadedFiles.push(...results.filter(r => r !== null))
-    if (results.includes(null)) break // Break the loop if any null results (403 errors)
+    if (results.includes(null)) break // Break if any chunks fail (e.g., 403 error)
   }
 
+  outputFile = path.join(videosDir, `${videoId}.ts`)
+
   if (downloadedFiles.length > 0) {
-    const outputFile = path.join(videosDir, `${videoId}.ts`)
     await concatenateChunks(downloadedFiles, outputFile)
   } else {
     console.error('No chunks were downloaded successfully.')
@@ -182,4 +213,12 @@ async function downloadVideoWithTitle(url, maxConcurrency = 3) {
   const title = findTitle(data, videoId)
   console.log(`Downloading video titled: ${title}`)
   await downloadVideo(url, maxConcurrency)
+}
+
+if (argv.title) {
+  downloadVideoWithTitle(argv.url).catch(console.error)
+  process.exit(0)
+} else {
+  downloadVideo(argv.url).catch(console.error)
+  process.exit(0)
 }
