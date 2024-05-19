@@ -131,6 +131,9 @@ async function downloadVideo(videoUrl, maxConcurrency = 3) {
 
   const videoId = videoUrl.split('/').slice(-2, -1)[0]
   const resolution = argv.resolution
+  console.log(
+    `Downloading video with ID: ${videoId} and resolution: ${resolution}`
+  )
   const chunks = prepareChunks(videoId, resolution)
   let downloadedFiles = []
 
@@ -211,14 +214,27 @@ async function downloadVideoWithTitle(url, maxConcurrency = 3) {
 
   const videoId = url.split('/').slice(-2, -1)[0]
   const title = findTitle(data, videoId)
-  console.log(`Downloading video titled: ${title}`)
+  console.log(
+    `Downloading video titled: ${title} with the resolution: ${argv.resolution}`
+  )
   await downloadVideo(url, maxConcurrency)
 }
 
-if (argv.title) {
-  downloadVideoWithTitle(argv.url).catch(console.error)
-  process.exit(0)
-} else {
-  downloadVideo(argv.url).catch(console.error)
-  process.exit(0)
+async function main() {
+  const { url, title } = argv
+  try {
+    if (title) {
+      await downloadVideoWithTitle(url)
+    } else {
+      await downloadVideo(url)
+    }
+  } catch (error) {
+    console.error('An error occurred:', error)
+    process.exit(1) // Exit with error code 1
+  } finally {
+    console.log('Process completed.')
+    process.exit(0)
+  }
 }
+
+main()
