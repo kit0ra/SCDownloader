@@ -1,5 +1,4 @@
 import axios from 'axios'
-import fs from 'fs'
 import path from 'path'
 import puppeteer from 'puppeteer'
 import {
@@ -10,6 +9,9 @@ import {
   mkdirSync,
   existsSync,
 } from 'fs'
+import { pipeline as pipelineCallback } from 'stream'
+import { promisify } from 'util'
+const pipeline = promisify(pipelineCallback)
 
 const RESOLUTIONS = {
   hd: 1500,
@@ -98,11 +100,9 @@ async function downloadVideo(videoUrl, maxConcurrency = 3) {
   ensureDirExists(videosDir)
 
   const videoId = videoUrl.split('/').slice(-2, -1)[0]
-  const resolution = 'hd' // Example, you can modify as needed
+  const resolution = 'hd'
   const chunks = prepareChunks(videoId, resolution)
   let downloadedFiles = []
-
-  console.log(`Downloading video with the ID: ${videoId}`)
 
   for (let i = 0; i < chunks.length; i += maxConcurrency) {
     const group = chunks.slice(i, i + maxConcurrency)
@@ -126,7 +126,7 @@ async function fetchData(url) {
   const browser = await puppeteer.launch({
     headless: true,
     args: ['--no-sandbox', '--disable-setuid-sandbox'],
-    slowMo: 250, // Slow down by 250ms for each Puppeteer operation. Helpful for observing what happens.
+    slowMo: 250,
   })
   const page = await browser.newPage()
 
@@ -171,15 +171,15 @@ function findTitle(data, id) {
   return data[id] || 'Title not found'
 }
 
-fetchData(
-  'https://www.skill-capped.com/valorant/browse/course/yph4lclcnw/1nrgw1w4yh'
-)
-  .then(data => {
-    console.log('Download and processing completed successfully.')
-    console.log(`title of the video is: ${findTitle(data, 'yph4lclcnw')}`)
-    process.exit(0) // Normal exit
-  })
-  .catch(error => {
-    console.error('An error occurred:', error)
-    process.exit(1) // Exit with error
-  })
+async function downloadVideoWithTitle(url, maxConcurrency = 3) {
+  const data = await fetchData(url)
+  if (!data) {
+    console.error('Failed to fetch data. Exiting...')
+    return
+  }
+
+  const videoId = url.split('/').slice(-2, -1)[0]
+  const title = findTitle(data, videoId)
+  console.log(`Downloading video titled: ${title}`)
+  await downloadVideo(url, maxConcurrency)
+}
