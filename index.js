@@ -63,3 +63,29 @@ async function downloadChunk(url, destDir, index) {
     return null
   }
 }
+
+function concatenateChunks(files, outputFile) {
+  return new Promise((resolve, reject) => {
+    ensureDirExists(path.dirname(outputFile))
+    const output = createWriteStream(outputFile)
+    console.log('Assembling video...')
+
+    files.forEach(file => {
+      const data = readFileSync(file)
+      output.write(data)
+      unlinkSync(file) // Remove the file after appending
+    })
+
+    output.on('finish', () => {
+      console.log(
+        `Video titled "${path.basename(
+          outputFile
+        )}" saved in location: ${outputFile}`
+      )
+      resolve()
+    })
+    output.on('error', reject)
+
+    output.end()
+  })
+}
