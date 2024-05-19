@@ -33,3 +33,33 @@ function prepareChunks(videoId, resolution) {
   }
   return urls
 }
+
+async function downloadChunk(url, destDir, index) {
+  const filename = path.basename(url)
+  const dest = path.join(destDir, filename)
+
+  try {
+    const response = await axios({
+      method: 'get',
+      url,
+      responseType: 'stream',
+    })
+    if (response.status === 403) {
+      console.error(`Access denied for chunk ${index}: 403 Forbidden`)
+      return null
+    }
+    const totalLength = response.headers['content-length']
+    let currentLength = 0
+    response.data.on('data', chunk => {
+      currentLength += chunk.length
+      const percentage = ((currentLength / totalLength) * 100).toFixed(2)
+      process.stdout.write(`\rChunk ${index}: Downloading ${percentage}%`)
+    })
+    await pipeline(response.data, createWriteStream(dest))
+    console.log(`\nChunk ${index}: Download finished`)
+    return dest
+  } catch (error) {
+    console.error(`\nChunk ${index}: Failed to download. Error: ${error}`)
+    return null
+  }
+}
